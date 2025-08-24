@@ -26,6 +26,36 @@ st.set_page_config(
 )
 
 # ──────────────────────────────────────────────
+# Encoding Maps (must match training preprocessing)
+# ──────────────────────────────────────────────
+education_map = {
+    "HS-grad": 0,
+    "Some-college": 1,
+    "Assoc": 2,
+    "Bachelors": 3,
+    "Masters": 4,
+    "PhD": 5
+}
+
+occupation_map = {
+    "Tech-support": 0, "Craft-repair": 1, "Other-service": 2, "Sales": 3,
+    "Exec-managerial": 4, "Prof-specialty": 5, "Handlers-cleaners": 6,
+    "Machine-op-inspct": 7, "Adm-clerical": 8, "Farming-fishing": 9,
+    "Transport-moving": 10, "Priv-house-serv": 11, "Protective-serv": 12,
+    "Armed-Forces": 13
+}
+
+def preprocess_input(df: pd.DataFrame):
+    """Convert categorical features to numeric codes"""
+    df = df.copy()
+    try:
+        df["education"] = df["education"].map(education_map)
+        df["occupation"] = df["occupation"].map(occupation_map)
+    except Exception as e:
+        st.error(f"⚠️ Error in preprocessing: {e}")
+    return df
+
+# ──────────────────────────────────────────────
 # Header
 # ──────────────────────────────────────────────
 st.title("💼 Employee Salary Classification")
@@ -42,16 +72,9 @@ with st.expander("📝 Single Prediction: Enter Employee Details", expanded=True
     with st.form("prediction_form"):
         age = st.slider("Age", 18, 65, 30)
 
-        education = st.selectbox("Education Level", [
-            "Bachelors", "Masters", "PhD", "HS-grad", "Assoc", "Some-college"
-        ])
+        education = st.selectbox("Education Level", list(education_map.keys()))
 
-        occupation = st.selectbox("Occupation", [
-            "Tech-support", "Craft-repair", "Other-service", "Sales",
-            "Exec-managerial", "Prof-specialty", "Handlers-cleaners", "Machine-op-inspct",
-            "Adm-clerical", "Farming-fishing", "Transport-moving", "Priv-house-serv",
-            "Protective-serv", "Armed-Forces"
-        ])
+        occupation = st.selectbox("Occupation", list(occupation_map.keys()))
 
         hours_per_week = st.slider("Hours per Week", 1, 80, 40)
         experience = st.slider("Years of Experience", 0, 40, 5)
@@ -68,10 +91,13 @@ with st.expander("📝 Single Prediction: Enter Employee Details", expanded=True
                     "hours-per-week": [hours_per_week],
                     "experience": [experience]
                 })
-                st.subheader("🔍 Preview of Input Data")
+                st.subheader("🔍 Preview of Input Data (Before Encoding)")
                 st.dataframe(input_df, use_container_width=True)
 
-                prediction = model.predict(input_df)
+                # Preprocess before prediction
+                encoded_df = preprocess_input(input_df)
+
+                prediction = model.predict(encoded_df)
                 if prediction[0] == ">50K":
                     st.success("💰 Prediction: Employee earns **>50K** ✅")
                 else:
@@ -102,7 +128,10 @@ if uploaded_file:
             st.dataframe(batch_data.head(), use_container_width=True)
 
             if model:
-                batch_preds = model.predict(batch_data)
+                # Preprocess before prediction
+                encoded_batch = preprocess_input(batch_data)
+
+                batch_preds = model.predict(encoded_batch)
                 batch_data["PredictedClass"] = batch_preds
 
                 st.success("✅ Batch predictions complete!")
