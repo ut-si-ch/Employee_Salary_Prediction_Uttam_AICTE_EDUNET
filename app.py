@@ -4,94 +4,121 @@ import joblib
 import zipfile
 import os
 
-# Unzip only if it's not already extracted
-if not os.path.exists("Champion_model.pkl"):
-    with zipfile.ZipFile("Champion_model.zip", "r") as zip_ref:
-        zip_ref.extractall()  # Extracts in the current directory
-        
+# ──────────────────────────────────────────────
+# Safe Model Loading
+# ──────────────────────────────────────────────
+model = None
+try:
+    if not os.path.exists("Champion_model.pkl"):
+        with zipfile.ZipFile("Champion_model.zip", "r") as zip_ref:
+            zip_ref.extractall()
+    model = joblib.load("Champion_model.pkl")
+except Exception as e:
+    st.error(f"❌ Error loading model: {e}")
 
-# 🔹 Load the trained model
-model = joblib.load("Champion_model.pkl")
-
-# 🔹 Page configuration
+# ──────────────────────────────────────────────
+# Page Config
+# ──────────────────────────────────────────────
 st.set_page_config(
     page_title="Employee Salary Classification",
     page_icon="💼",
     layout="centered"
 )
 
-# 🔹 App Title
+# ──────────────────────────────────────────────
+# Header
+# ──────────────────────────────────────────────
 st.title("💼 Employee Salary Classification")
-st.markdown("Use this app to predict whether an employee earns >50K or ≤50K based on various inputs.")
+st.markdown(
+    "This app predicts whether an employee earns **>50K** or **≤50K** "
+    "based on their details. You can either enter a single record manually or upload a CSV file."
+)
+st.info("💡 Tip: Use the single prediction form for testing, or upload a CSV for bulk predictions.")
 
-# ─────────────────────────────────────────────────────────────
-# Sidebar: User Inputs
-# ─────────────────────────────────────────────────────────────
-st.sidebar.header("📝 Enter Employee Details")
+# ──────────────────────────────────────────────
+# Input Form (Single Prediction)
+# ──────────────────────────────────────────────
+with st.expander("📝 Single Prediction: Enter Employee Details", expanded=True):
+    with st.form("prediction_form"):
+        age = st.slider("Age", 18, 65, 30)
 
-# 🌟 Input fields (should match the training data's feature names)
-age = st.sidebar.slider("Age", 18, 65, 30)
+        education = st.selectbox("Education Level", [
+            "Bachelors", "Masters", "PhD", "HS-grad", "Assoc", "Some-college"
+        ])
 
-education = st.sidebar.selectbox("Education Level", [
-    "Bachelors", "Masters", "PhD", "HS-grad", "Assoc", "Some-college"
-])
+        occupation = st.selectbox("Occupation", [
+            "Tech-support", "Craft-repair", "Other-service", "Sales",
+            "Exec-managerial", "Prof-specialty", "Handlers-cleaners", "Machine-op-inspct",
+            "Adm-clerical", "Farming-fishing", "Transport-moving", "Priv-house-serv",
+            "Protective-serv", "Armed-Forces"
+        ])
 
-occupation = st.sidebar.selectbox("Occupation", [
-    "Tech-support", "Craft-repair", "Other-service", "Sales",
-    "Exec-managerial", "Prof-specialty", "Handlers-cleaners", "Machine-op-inspct",
-    "Adm-clerical", "Farming-fishing", "Transport-moving", "Priv-house-serv",
-    "Protective-serv", "Armed-Forces"
-])
+        hours_per_week = st.slider("Hours per Week", 1, 80, 40)
+        experience = st.slider("Years of Experience", 0, 40, 5)
 
-hours_per_week = st.sidebar.slider("Hours per Week", 1, 80, 40)
-experience = st.sidebar.slider("Years of Experience", 0, 40, 5)
+        submit_btn = st.form_submit_button("🔮 Predict Salary Class")
 
-# 🔹 Create input DataFrame (column names must match model's expectation)
-input_df = pd.DataFrame({
-    "age": [age],
-    "education": [education],
-    "occupation": [occupation],
-    "hours-per-week": [hours_per_week],
-    "experience": [experience]
-})
+    if submit_btn:
+        if model:
+            try:
+                input_df = pd.DataFrame({
+                    "age": [age],
+                    "education": [education],
+                    "occupation": [occupation],
+                    "hours-per-week": [hours_per_week],
+                    "experience": [experience]
+                })
+                st.subheader("🔍 Preview of Input Data")
+                st.dataframe(input_df, use_container_width=True)
 
-# 🔹 Display input
-st.subheader("🔍 Preview of Input Data")
-st.dataframe(input_df)
+                prediction = model.predict(input_df)
+                if prediction[0] == ">50K":
+                    st.success("💰 Prediction: Employee earns **>50K** ✅")
+                else:
+                    st.warning("📉 Prediction: Employee earns **≤50K** ⚠️")
+            except Exception as e:
+                st.error(f"❌ Prediction failed: {e}")
+        else:
+            st.error("⚠️ Model not available. Please check deployment setup.")
 
-# ─────────────────────────────────────────────────────────────
-# Single Prediction
-# ─────────────────────────────────────────────────────────────
-if st.button("🔮 Predict Salary Class"):
-    prediction = model.predict(input_df)
-    st.success(f"✅ Prediction: {prediction[0]}")
-
-# ─────────────────────────────────────────────────────────────
-# Batch Prediction Section
-# ─────────────────────────────────────────────────────────────
+# ──────────────────────────────────────────────
+# Batch Prediction (CSV Upload)
+# ──────────────────────────────────────────────
 st.markdown("---")
 st.subheader("📂 Batch Prediction (Upload CSV)")
 
-uploaded_file = st.file_uploader("Upload a CSV file with employee data", type="csv")
+st.info("📌 Upload a CSV file with employee data to get predictions for multiple records at once.")
+
+uploaded_file = st.file_uploader("Choose a CSV file", type="csv")
 
 if uploaded_file:
-    batch_data = pd.read_csv(uploaded_file)
-    st.write("📄 Uploaded Data Preview:")
-    st.dataframe(batch_data.head())
+    try:
+        batch_data = pd.read_csv(uploaded_file)
 
-    # 🔹 Make predictions
-    batch_preds = model.predict(batch_data)
-    batch_data["PredictedClass"] = batch_preds
+        if batch_data.empty:
+            st.warning("⚠️ The uploaded CSV file is empty. Please check your data.")
+        else:
+            st.write("📄 Uploaded Data Preview:")
+            st.dataframe(batch_data.head(), use_container_width=True)
 
-    # 🔹 Show results
-    st.success("✅ Batch predictions complete!")
-    st.write(batch_data.head())
+            if model:
+                batch_preds = model.predict(batch_data)
+                batch_data["PredictedClass"] = batch_preds
 
-    # 🔹 Download button
-    csv = batch_data.to_csv(index=False).encode("utf-8")
-    st.download_button(
-        label="📥 Download Predictions as CSV",
-        data=csv,
-        file_name="predicted_classes.csv",
-        mime="text/csv"
-    )
+                st.success("✅ Batch predictions complete!")
+                st.write(batch_data.head())
+
+                # Download option
+                csv = batch_data.to_csv(index=False).encode("utf-8")
+                st.download_button(
+                    label="📥 Download Predictions as CSV",
+                    data=csv,
+                    file_name="predicted_classes.csv",
+                    mime="text/csv"
+                )
+            else:
+                st.error("⚠️ Model not available for batch predictions.")
+    except Exception as e:
+        st.error(f"❌ Error processing file: {e}")
+else:
+    st.info("📂 Awaiting CSV upload. Please select a file above.")
