@@ -1,6 +1,6 @@
 streamlit
 pandas
 joblib
-sklearn
+scikit-learn
 xgboost
 pickle
