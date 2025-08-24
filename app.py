@@ -1,6 +1,14 @@
 import streamlit as st
 import pandas as pd
 import joblib
+import zipfile
+import os
+
+# Unzip only if it's not already extracted
+if not os.path.exists("Champion_model.pkl"):
+    with zipfile.ZipFile("Champion_model.zip", "r") as zip_ref:
+        zip_ref.extractall()  # Extracts in the current directory
+        
 
 # 🔹 Load the trained model
 model = joblib.load("Champion_model.pkl")
